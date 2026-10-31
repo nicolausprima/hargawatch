@@ -193,9 +193,25 @@ Dalam operasional harian, model `.pkl` yang sudah tersimpan **tidak perlu di-ret
 ### Cara Melakukan Retraining:
 Jalankan runner eksperimen paralel multi-core di terminal:
 ```powershell
-.\.venv\Scripts\python scripts/run_parallel_commodity_experiments.py --workers 4 --force-all
+python scripts/run_parallel_commodity_experiments.py --workers 4 --force-all
 ```
 Skrip ini akan menelan seluruh riwayat harga mutakhir, melatih model dengan bobot terbaru, dan memperbarui seluruh file `.pkl` di folder `models/forecasting/` serta file `models/forecasting/registry.json`.
+
+### SOP Verifikasi SHA-256 & Keamanan Model (.pkl)
+Setiap kali model champion selesai dilatih atau diperbarui, digest integritas SHA-256 wajib dihitung dan dicatat di `models/forecasting/registry.json`:
+```powershell
+python scripts/update_registry_hashes.py
+```
+* Pipeline produksi `scripts/run_forecasting.py` menerapkan prinsip *fail-closed*: model non-Naive tanpa SHA-256 yang cocok akan langsung ditolak sebelum `pickle.load` dipanggil.
+* Ke-10 file biner champion `.pkl` disimpan di dalam Git tracking sebagai artefak terverifikasi (*audited blobs*).
+
+### SOP Integritas Data & Manifest Provenance
+* Dataset di produksi tidak pernah memakai mock secara senyap (*zero silent mock fallback*).
+* File cache lokal di `data/processed/` dilengkapi manifest tanda terima `.manifest.json` (SHA-256, `max_tanggal`, `row_count`).
+* Untuk memperbarui manifest secara manual:
+```powershell
+python -c "from src.analytics.features import write_dataset_manifest; write_dataset_manifest()"
+```
 
 ---
 
@@ -209,6 +225,8 @@ Skrip ini akan menelan seluruh riwayat harga mutakhir, melatih model dengan bobo
 | **Menjalankan Simulasi Lokal (Tanpa Sentuh Cloud)** | `.\.venv\Scripts\python scripts/run_forecasting.py --local-only --horizon 7` |
 | **Mengevaluasi & Mengirim Alert Telegram** | `.\.venv\Scripts\python scripts/generate_daily_alerts.py` |
 | **Mengejar Tanggal Data yang Tertinggal** | `.\.venv\Scripts\python scripts/update_catchup.py` |
-| **Melatih Ulang 38 Model Champion (Paralel)** | `.\.venv\Scripts\python scripts/run_parallel_commodity_experiments.py --workers 4` |
+| **Melatih Ulang 38 Model Champion (Paralel)** | `python scripts/run_parallel_commodity_experiments.py --workers 4` |
+| **Menghitung & Memperbarui SHA-256 Registry** | `python scripts/update_registry_hashes.py` |
+| **Memperbarui Provenance Manifest Cache CSV** | `python -c "from src.analytics.features import write_dataset_manifest; write_dataset_manifest()"` |
 | **Memasang Otomasi Windows Task Scheduler** | `powershell -ExecutionPolicy Bypass -File scripts/setup_task_scheduler.ps1` |
-| **Menjalankan Seluruh Unit Test Suite (79 Tests)** | `.\.venv\Scripts\pytest tests/` |
+| **Menjalankan Seluruh Unit Test Suite (90 Tests)** | `.\.venv\Scripts\pytest tests/` |

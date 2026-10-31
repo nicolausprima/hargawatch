@@ -66,7 +66,7 @@ Read documents only when relevant to the task. Verify that a file exists before 
    * SISKAPERBAPO blocks datacenter IPs (HTTP 403 Forbidden).
    * **Do NOT move scraping to GitHub Actions.** Daily ingestion is strictly On-Premise via Windows Task Scheduler executing `scripts/run_daily_pipeline.py`.
 2. **Model Deserialization Security:**
-   * Any loading of `.pkl` files in `scripts/run_forecasting.py` must enforce directory path containment (`Path.resolve()`) and validate SHA-256 integrity digests against `models/forecasting/registry.json` when present.
+   * Any loading of `.pkl` files in `scripts/run_forecasting.py` must enforce directory path containment strictly within `MODEL_DIR` (`resolved_path.is_relative_to(MODEL_DIR.resolve())`) and enforce mandatory SHA-256 integrity digests against `models/forecasting/registry.json` for all non-Naive champion models (fail-closed before `pickle.load`). The 10 champion `.pkl` blobs are tracked in Git as verified model artifacts.
 3. **Database Security & Access Control:**
    * PostgreSQL tables in Supabase (`fact_forecast`, `fact_early_warning`, `fact_harga_pasar`) have Row-Level Security (RLS) enabled.
    * Client-side queries use the public anonymous/publishable key (`sb_publishable_...`). Ingestion and administrative mutations use the private service role key strictly from local `.env`.
@@ -90,6 +90,9 @@ Apply these rules whenever editing data preprocessing, feature engineering, mode
    * Commodities where Naive outperforms ML (WAPE < 1%, e.g., Beras, Minyak Goreng Curah) must use Naive champion strategy.
 4. **Training-Serving Skew Elimination:**
    * Preprocessing and feature construction logic must be imported from `src/pipeline/ingestion.py` and `src/analytics/features.py`. Do not duplicate transformations between offline notebooks and production scripts.
+5. **Fail-Closed Data Integrity:**
+   * Production datasets never fall back silently to synthetic/mock data. If DB and local CSV cache are unavailable, pipeline raises `RuntimeError`. Mock data is strictly gated behind `HARGAWATCH_ALLOW_MOCK=1` for offline CI testing.
+   * Local CSV caches maintain `.manifest.json` provenance with SHA-256, row counts, and staleness checks (>24h warning).
 
 ---
 
@@ -103,7 +106,7 @@ Run tests before declaring any task complete. Never skip, delete, or weaken asse
 .venv\Scripts\activate   # Windows
 # source .venv/bin/activate # Linux/macOS
 
-# Run complete test suite (79 unit and integration tests)
+# Run complete test suite (90 unit and integration tests)
 pytest tests/ -v
 
 # Run targeted test suites
@@ -137,6 +140,6 @@ npm audit --audit-level=high  # Must report 0 vulnerabilities
 
 When reporting task completion, include:
 1. **Summary of Changes:** Specific files modified and architectural rationale.
-2. **Verification Evidence:** Exact commands executed and their output (e.g. `79 passed in 21.06s`, `npm run build: 8/8 static pages`).
+2. **Verification Evidence:** Exact commands executed and their output (e.g. `90 passed in 60.88s`, `npm run build: 8/8 static pages`).
 3. **Unverified Aspects:** Explicitly state any checks that were skipped or not possible to run locally.
 4. **Git Branch & Commit Status:** Current branch, commit hash, and whether changes have been pushed to origin.

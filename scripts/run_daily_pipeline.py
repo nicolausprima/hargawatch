@@ -2,7 +2,9 @@
 
 Executes the sequential daily production workflow:
   Step 1: Scrape & Ingest latest market & producer prices (`scripts/update_harian.py`)
-  Step 2: Generate 14-day forecasts & EWS risk matrices (`scripts/run_forecasting.py --from-db`)
+  Step 2: Freshness check & automatic catch-up if stale (`scripts/update_catchup.py`)
+  Step 3: Generate 14-day forecasts & EWS risk matrices (`scripts/run_forecasting.py --from-db`)
+  Step 4: Dispatch Telegram alerts (`scripts/generate_daily_alerts.py`)
 
 Designed to be invoked by Windows Task Scheduler (via run_pipeline.bat)
 or Linux cron jobs.
@@ -65,6 +67,109 @@ def run_step(step_name: str, cmd: list) -> bool:
         return False
 
 
+def check_data_freshness_and_catchup(
+    max_stale_days: int = 3,
+    get_conn_fn=None,
+    run_catchup_fn=None
+) -> bool:
+    """Verifies that fact_harga_pasar is not stale (> max_stale_days behind today).
+    
+    If stale, triggers update_catchup.py.
+    Returns True if data is fresh, False if stale and catchup failed/data remains stale.
+    """
+    log("--- CHECKING DATA FRESHNESS ---")
+    today = datetime.datetime.now().date()
+    max_date = None
+
+    if get_conn_fn is None:
+        try:
+            from src.utils.ingest_supabase import koneksi
+            get_conn_fn = koneksi
+        except Exception as e:
+            log(f"[WARN] Unable to import Supabase connection helper: {e}")
+
+    if get_conn_fn:
+        try:
+            conn = get_conn_fn()
+            cur = conn.cursor()
+            cur.execute("SELECT MAX(tanggal) FROM fact_harga_pasar")
+            res = cur.fetchone()
+            if res and res[0]:
+                max_date = res[0]
+                if isinstance(max_date, str):
+                    max_date = datetime.date.fromisoformat(max_date[:10])
+                elif isinstance(max_date, datetime.datetime):
+                    max_date = max_date.date()
+            conn.close()
+        except Exception as e:
+            log(f"[WARN] Failed to query max(tanggal) from database: {e}")
+
+    # Fallback to local CSV if DB query was not available
+    if max_date is None:
+        csv_path = BASE_DIR / "data" / "processed" / "fact_harga_pasar.csv"
+        if csv_path.exists():
+            try:
+                import pandas as pd
+                df_sample = pd.read_csv(csv_path, usecols=["tanggal"], parse_dates=["tanggal"])
+                if not df_sample.empty:
+                    max_date = df_sample["tanggal"].max().date()
+            except Exception as e:
+                log(f"[WARN] Failed to read local CSV date: {e}")
+
+    if max_date is None:
+        log("[ERROR] Unable to determine max date of fact_harga_pasar.")
+        return False
+
+    lag_days = (today - max_date).days
+    log(f"Latest market data date: {max_date} (Lag: {lag_days} days, Stale Threshold: {max_stale_days} days)")
+
+    if lag_days > max_stale_days:
+        log(f"[WARNING] Data is stale by {lag_days} days (> {max_stale_days} days). Triggering catch-up...")
+        
+        catchup_success = False
+        if run_catchup_fn:
+            catchup_success = run_catchup_fn()
+        else:
+            catchup_cmd = [PYTHON_EXE, str(SCRIPTS_DIR / "update_catchup.py")]
+            catchup_success = run_step("DATA_CATCHUP", catchup_cmd)
+
+        if not catchup_success:
+            log("[FATAL] Data catch-up failed. Aborting pipeline to prevent forecasting on stale data.")
+            try:
+                from src.utils.utils_alerting import send_telegram_alert
+                send_telegram_alert(
+                    f"🚨 *[HargaWatch Freshness Alert]*\n"
+                    f"Data harga pasar basi ({lag_days} hari tertinggal, terakhir: {max_date}).\n"
+                    f"Catch-up otomatis GAGAL. Pipeline forecasting dibatalkan demi keamanan data."
+                )
+            except Exception:
+                pass
+            return False
+
+        # Re-verify freshness after catch-up
+        if get_conn_fn:
+            try:
+                conn = get_conn_fn()
+                cur = conn.cursor()
+                cur.execute("SELECT MAX(tanggal) FROM fact_harga_pasar")
+                res = cur.fetchone()
+                if res and res[0]:
+                    new_max = res[0]
+                    if isinstance(new_max, str):
+                        new_max = datetime.date.fromisoformat(new_max[:10])
+                    elif isinstance(new_max, datetime.datetime):
+                        new_max = new_max.date()
+                    if (today - new_max).days > max_stale_days:
+                        log(f"[FATAL] Data remains stale after catch-up ({new_max}). Aborting pipeline.")
+                        return False
+                conn.close()
+            except Exception:
+                pass
+
+    log("[INFO] Data freshness check PASSED.")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description="HargaWatch Surabaya - Daily Production Pipeline Runner")
     parser.add_argument("--tanggal", type=str, default=None, help="Target date YYYY-MM-DD for scraping (default: yesterday)")
@@ -92,7 +197,14 @@ def main():
     else:
         log("[INFO] Skipping data scraping step as requested (--skip-scrape).")
 
-    # Step 2: Forecasting & Early Warning Scoring
+    # Step 2: Verify Data Freshness & Catch-up before Forecasting
+    if not args.skip_forecast:
+        is_fresh = check_data_freshness_and_catchup(max_stale_days=3)
+        if not is_fresh:
+            log("[FATAL] Pipeline stopped because market price data is stale and catch-up could not resolve it.")
+            sys.exit(1)
+
+    # Step 3: Forecasting & Early Warning Scoring
     if not args.skip_forecast:
         forecast_cmd = [
             PYTHON_EXE,
@@ -112,8 +224,8 @@ def main():
     else:
         log("[INFO] Skipping forecasting step as requested (--skip-forecast).")
 
-    # Step 3: Dispatch Telegram Alerts
-    if not args.skip_forecast:  # Hanya dispatch jika forecasting berjalan atau ada data baru
+    # Step 4: Dispatch Telegram Alerts
+    if not args.skip_forecast:
         alert_cmd = [PYTHON_EXE, str(SCRIPTS_DIR / "generate_daily_alerts.py")]
         success_alert = run_step("DISPATCH_TELEGRAM_ALERTS", alert_cmd)
         if not success_alert:

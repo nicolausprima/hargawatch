@@ -5,7 +5,7 @@
     "horizon": 7,
     "model_name": "XGBoost p50",
     "wape_pct": 14.97,
-    "model_path": "D:\\ARFI\\Kuliah\\Project\\project-semester5\\hargawatch-surabaya\\models\\forecasting\\xgboost_50_h7.pkl",
+    "model_path": "models/forecasting/xgboost_50_h7.pkl",
     "features": [
       "pasar_id",
       "price_current",
@@ -29,7 +29,8 @@
       "target_is_pra_ramadan",
       "target_hari_ke_idulfitri"
     ],
-    "updated_at": "2026-10-19T15:39:01.373303"
+    "updated_at": "2026-10-19T15:39:01.373303",
+    "sha256": "02d4f20c1aeb7d50a253d41a3f32e6276bb9d51ef1abb17a17a738c179a74dc9"
   },
   "39_h7": {
     "komoditas_id": 39,
@@ -37,7 +38,7 @@
     "horizon": 7,
     "model_name": "CatBoost p50",
     "wape_pct": 8.02,
-    "model_path": "D:\\ARFI\\Kuliah\\Project\\project-semester5\\hargawatch-surabaya\\models\\forecasting\\catboost_39_h7.pkl",
+    "model_path": "models/forecasting/catboost_39_h7.pkl",
     "features": [
       "pasar_id",
       "price_current",
@@ -56,7 +57,8 @@
       "keputran_price_lag_2",
       "keputran_price_lag_3"
     ],
-    "updated_at": "2026-10-19T15:41:16.236396"
+    "updated_at": "2026-10-19T15:41:16.236396",
+    "sha256": "c11ff6ff34c5873cc931700e0cd19e9c0e2e150bc2d1110844310e8b4f29c2b2"
   },
   "16_h7": {
     "komoditas_id": 16,
@@ -64,7 +66,7 @@
     "horizon": 7,
     "model_name": "XGBoost p50",
     "wape_pct": 3.04,
-    "model_path": "D:\\ARFI\\Kuliah\\Project\\project-semester5\\hargawatch-surabaya\\models\\forecasting\\xgboost_16_h7.pkl",
+    "model_path": "models/forecasting/xgboost_16_h7.pkl",
     "features": [
       "pasar_id",
       "price_current",
@@ -83,7 +85,8 @@
       "keputran_price_lag_2",
       "keputran_price_lag_3"
     ],
-    "updated_at": "2026-10-23T19:35:43.560849"
+    "updated_at": "2026-10-23T19:35:43.560849",
+    "sha256": "e3096ff4c88bb769500cd54cd0283859a6a032bbdab7ec754afdc4e98d79badb"
   },
   "10_h7": {
     "komoditas_id": 10,
@@ -196,7 +199,7 @@
     "horizon": 7,
     "model_name": "XGBoost p50",
     "wape_pct": 13.63,
-    "model_path": "D:\\ARFI\\Kuliah\\Project\\project-semester5\\hargawatch-surabaya\\models\\forecasting\\xgboost_38_h7.pkl",
+    "model_path": "models/forecasting/xgboost_38_h7.pkl",
     "features": [
       "pasar_id",
       "price_current",
@@ -220,7 +223,8 @@
       "target_is_pra_ramadan",
       "target_hari_ke_idulfitri"
     ],
-    "updated_at": "2026-10-23T22:25:35.987081"
+    "updated_at": "2026-10-23T22:25:35.987081",
+    "sha256": "c5e70805f7ed70d5a75b53f2d3d9f4f8446cba2b98ffe8e1f1d2d20231f14e17"
   },
   "37_h7": {
     "komoditas_id": 37,
@@ -388,7 +392,7 @@
     "horizon": 7,
     "model_name": "XGBoost p50",
     "wape_pct": 9.57,
-    "model_path": "D:\\ARFI\\Kuliah\\Project\\project-semester5\\hargawatch-surabaya\\models\\forecasting\\xgboost_48_h7.pkl",
+    "model_path": "models/forecasting/xgboost_48_h7.pkl",
     "features": [
       "pasar_id",
       "price_current",
@@ -412,7 +416,8 @@
       "target_is_pra_ramadan",
       "target_hari_ke_idulfitri"
     ],
-    "updated_at": "2026-10-23T22:47:30.356205"
+    "updated_at": "2026-10-23T22:47:30.356205",
+    "sha256": "f666aa59a291e87667bfd196d4701d23d9524adf72e85eae39088c40eefdabd8"
   },
   "12_h7": {
     "komoditas_id": 12,
@@ -597,7 +602,7 @@
     "horizon": 7,
     "model_name": "XGBoost p50",
     "wape_pct": 0.05,
-    "model_path": "D:\\ARFI\\Kuliah\\Project\\project-semester5\\hargawatch-surabaya\\models\\forecasting\\xgboost_28_h7.pkl",
+    "model_path": "models/forecasting/xgboost_28_h7.pkl",
     "features": [
       "pasar_id",
       "price_current",
@@ -616,7 +621,8 @@
       "keputran_price_lag_2",
       "keputran_price_lag_3"
     ],
-    "updated_at": "2026-10-23T23:19:41.786535"
+    "updated_at": "2026-10-23T23:19:41.786535",
+    "sha256": "2950d6fab13f0df59df86bb2b25c2b00c4de8796d6288811f65b884bcb8f081e"
   },
   "20_h7": {
     "komoditas_id": 20,
@@ -786,7 +792,7 @@
     "horizon": 7,
     "model_name": "LightGBM p50",
     "wape_pct": 0.29,
-    "model_path": "D:\\ARFI\\Kuliah\\Project\\project-semester5\\hargawatch-surabaya\\models\\forecasting\\lightgbm_43_h7.pkl",
+    "model_path": "models/forecasting/lightgbm_43_h7.pkl",
     "features": [
       "pasar_id",
       "price_current",
@@ -805,7 +811,8 @@
       "keputran_price_lag_2",
       "keputran_price_lag_3"
     ],
-    "updated_at": "2026-10-23T23:36:31.217969"
+    "updated_at": "2026-10-23T23:36:31.217969",
+    "sha256": "11e362e8b33e9202d5cfc4d7adedf6d994640739275c68dbabef1ec2adb2677a"
   },
   "49_h7": {
     "komoditas_id": 49,

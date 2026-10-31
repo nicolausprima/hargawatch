@@ -16,7 +16,6 @@ import {
 import {
   OFFICIAL_REGULATORY_BENCHMARKS,
   OFFICIAL_MODEL_CHAMPIONS,
-  DEFAULT_MODEL_METRIC,
 } from "@/lib/regulatoryData";
 
 // Batas acuan regulasi pemerintah dimuat dari OFFICIAL_REGULATORY_BENCHMARKS (Single Source of Truth)
@@ -133,7 +132,7 @@ export default function ForecastingPage() {
   }, [selectedCommodity]);
 
   const modelMeta = useMemo(() => {
-    return OFFICIAL_MODEL_CHAMPIONS[selectedCommodity] || DEFAULT_MODEL_METRIC;
+    return OFFICIAL_MODEL_CHAMPIONS[selectedCommodity] || null;
   }, [selectedCommodity]);
 
   const activeForecastRows = useMemo(() => {
@@ -603,14 +602,30 @@ export default function ForecastingPage() {
                   Model &amp; Akurasi
                 </span>
                 <div className="flex-1 flex flex-col justify-center py-2">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-metric-display text-metric-display text-status-normal font-bold">
-                      {modelMeta.accuracy.toFixed(1)}%
-                    </span>
-                    <span className="font-label-caps text-label-caps text-text-secondary">
-                      Akurasi
-                    </span>
-                  </div>
+                  {modelMeta ? (
+                    <>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-metric-display text-metric-display text-status-normal font-bold">
+                          {modelMeta.accuracy.toFixed(1)}%
+                        </span>
+                        <span className="font-label-caps text-label-caps text-text-secondary">
+                          Akurasi (WAPE {modelMeta.wape.toFixed(2)}%)
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-text-muted mt-1 block">
+                        Model: {modelMeta.modelName} • H+7 Walk-Forward Backtest
+                      </span>
+                    </>
+                  ) : (
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-metric-display text-metric-display text-text-muted font-bold">
+                        —
+                      </span>
+                      <span className="font-label-caps text-label-caps text-text-secondary">
+                        Tidak Tersedia
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

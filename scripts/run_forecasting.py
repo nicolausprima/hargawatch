@@ -87,25 +87,27 @@ def load_champion_from_registry(
 
     if resolved_path and resolved_path.exists():
         try:
-            # Security: Path traversal containment check
-            base_resolved = BASE_DIR.resolve()
-            if not str(resolved_path).startswith(str(base_resolved)):
-                raise PermissionError(f"Security violation: model path {resolved_path} outside {base_resolved}")
+            # Security: Path containment check - model MUST reside strictly within MODEL_DIR
+            model_dir_resolved = MODEL_DIR.resolve()
+            if not resolved_path.is_relative_to(model_dir_resolved):
+                raise PermissionError(f"Security violation: model path {resolved_path} outside {model_dir_resolved}")
 
-            # Security: SHA-256 integrity validation if digest is provided in registry
+            # Security: Mandatory SHA-256 integrity validation for non-naive models
             expected_sha256 = entry.get("sha256")
-            if expected_sha256:
-                import hashlib
-                with open(resolved_path, "rb") as f:
-                    actual_sha256 = hashlib.sha256(f.read()).hexdigest()
-                if actual_sha256 != expected_sha256:
-                    raise ValueError(f"Integrity check failed for {resolved_path.name}: expected {expected_sha256}, got {actual_sha256}")
+            if not expected_sha256:
+                raise ValueError(f"Integrity check failed: champion entry {key} ({model_name}) lacks sha256 in registry.json")
+
+            import hashlib
+            with open(resolved_path, "rb") as f:
+                actual_sha256 = hashlib.sha256(f.read()).hexdigest()
+            if actual_sha256 != expected_sha256:
+                raise ValueError(f"Integrity check mismatch for {resolved_path.name}: expected {expected_sha256}, got {actual_sha256}")
 
             with open(resolved_path, "rb") as f:
                 model_obj = pickle.load(f)
             return model_name, model_obj, features
         except Exception as e:
-            print(f"  [WARN] Failed to load local model {resolved_path}: {e}")
+            print(f"  [SECURITY/INTEGRITY ERROR] Failed to load local model {resolved_path}: {e}")
 
     # Fallback to W&B Model Registry if available
     try:
@@ -119,13 +121,14 @@ def load_champion_from_registry(
         if pkl_files:
             target_pkl = pkl_files[0].resolve()
             # Security: Path containment check for downloaded artifact
-            if not str(target_pkl).startswith(str(Path(download_dir).resolve())):
-                raise PermissionError(f"Security violation: artifact path {target_pkl} outside download directory")
+            download_dir_resolved = Path(download_dir).resolve()
+            if not target_pkl.is_relative_to(download_dir_resolved):
+                raise PermissionError(f"Security violation: artifact path {target_pkl} outside {download_dir_resolved}")
             with open(target_pkl, "rb") as f:
                 model_obj = pickle.load(f)
             return model_name, model_obj, features
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [WARN] W&B fallback artifact load skipped: {e}")
 
     return model_name, None, features
 
@@ -232,6 +235,7 @@ def train_and_forecast_commodity(
             std_7d = np.maximum(std_7d, p_curr * 0.02)
             p50 = np.maximum(0, np.nan_to_num(np.round(p_curr), nan=0)).astype(int)
             p10 = np.maximum(0, np.nan_to_num(np.round(p_curr - 1.28 * std_7d), nan=0)).astype(int)
+            p10 = np.minimum(p10, p50)
             p90 = np.maximum(p50, np.nan_to_num(np.round(p_curr + 1.28 * std_7d), nan=p50)).astype(int)
             preds = {
                 "harga_prediksi": p50,

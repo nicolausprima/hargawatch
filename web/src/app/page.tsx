@@ -179,6 +179,7 @@ export default function HomePage() {
       return;
     }
     setIsBasketLoading(true);
+    setBasketSim(null);
     getLiveShoppingBasket(activeBasketList)
       .then((sim) => {
         if (isMounted) {
@@ -1238,10 +1239,23 @@ export default function HomePage() {
                                 <span className="text-slate-900 font-semibold text-xs sm:text-sm truncate block" title={item.name}>
                                   {item.name}
                                 </span>
-                                {itemSubtotal > 0 && isChecked && (
-                                  <span className="text-[10.5px] sm:text-[11px] font-bold text-primary block">
-                                    Rp {itemSubtotal.toLocaleString("id-ID")}
-                                  </span>
+                                {simItem && (
+                                  simItem.available === false ? (
+                                    <span className="text-[10px] sm:text-[10.5px] font-medium text-amber-600 block">
+                                      Harga belum tersedia
+                                    </span>
+                                  ) : itemSubtotal > 0 && isChecked ? (
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-[10.5px] sm:text-[11px] font-bold text-primary block">
+                                        Rp {itemSubtotal.toLocaleString("id-ID")}
+                                      </span>
+                                      {simItem.is_imputed && (
+                                        <span className="text-[9px] px-1 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 font-medium">
+                                          Estimasi
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : null
                                 )}
                               </div>
                             </div>
@@ -1474,12 +1488,25 @@ export default function HomePage() {
                                     <span className="font-semibold text-slate-900 block truncate">
                                       {it.name} ({it.qty} {it.unit})
                                     </span>
-                                    <span className="text-[10.5px] text-teal-700 font-medium block">
-                                      📍 Beli di Pasar {it.cheapestMarket}
-                                    </span>
+                                    {it.available === false ? (
+                                      <span className="text-[10.5px] text-amber-600 font-medium block">
+                                        Harga belum tersedia
+                                      </span>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-[10.5px] text-teal-700 font-medium block">
+                                          📍 Beli di Pasar {it.cheapestMarket}
+                                        </span>
+                                        {it.is_imputed && (
+                                          <span className="text-[9px] px-1 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 font-medium">
+                                            Estimasi
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                   <span className="font-bold text-slate-900 shrink-0 text-xs">
-                                    Rp {it.itemTotal.toLocaleString("id-ID")}
+                                    {it.available === false ? "-" : `Rp ${it.itemTotal.toLocaleString("id-ID")}`}
                                   </span>
                                 </div>
                               ))}

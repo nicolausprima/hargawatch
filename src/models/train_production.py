@@ -220,17 +220,32 @@ def update_local_registry(
         except Exception:
             registry = {}
 
+    sha256_digest = None
+    normalized_path = None
+    if model_path:
+        mp = Path(model_path)
+        if mp.exists():
+            import hashlib
+            with open(mp, "rb") as f:
+                sha256_digest = hashlib.sha256(f.read()).hexdigest()
+            normalized_path = f"models/forecasting/{mp.name}"
+        else:
+            normalized_path = str(model_path)
+
     key = f"{komoditas_id}_h{horizon}"
-    registry[key] = {
+    entry = {
         "komoditas_id": komoditas_id,
         "commodity": canonical_name,
         "horizon": horizon,
         "model_name": best_model_name,
         "wape_pct": float(best_wape),
-        "model_path": str(model_path) if model_path else None,
+        "model_path": normalized_path,
         "features": features,
         "updated_at": datetime.datetime.now().isoformat()
     }
+    if sha256_digest:
+        entry["sha256"] = sha256_digest
+    registry[key] = entry
 
     with open(REGISTRY_FILE, "w", encoding="utf-8") as f:
         json.dump(registry, f, indent=2, ensure_ascii=False)

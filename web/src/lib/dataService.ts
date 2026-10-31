@@ -1554,11 +1554,20 @@ export interface SplitBasketItem {
   cheapestMarket: string;
   cheapestPrice: number;
   itemTotal: number;
+  available?: boolean;
+  is_imputed?: boolean;
+}
+
+export interface BasketSimulationItem extends BasketItem {
+  itemTotal: number;
+  price?: number;
+  available?: boolean;
+  is_imputed?: boolean;
 }
 
 export interface ShoppingBasketSimulation {
   tanggal: string;
-  items: Array<BasketItem & { itemTotal: number }>;
+  items: BasketSimulationItem[];
   rankings: MarketBasketRank[];
   tripSaving: number;
   monthlySaving: number;
@@ -1612,7 +1621,7 @@ export async function getLiveShoppingBasket(basketList: BasketItem[] = DEFAULT_B
       supabase.from("dim_pasar").select("pasar_id, nama_pasar"),
       supabase
         .from("fact_harga_pasar")
-        .select("komoditas_id, pasar_id, harga_imputasi, tanggal")
+        .select("komoditas_id, pasar_id, harga_imputasi, is_imputed, tanggal")
         .eq("tanggal", latestDate)
         .in("komoditas_id", cids)
         .not("harga_imputasi", "eq", "NaN")
@@ -1620,7 +1629,38 @@ export async function getLiveShoppingBasket(basketList: BasketItem[] = DEFAULT_B
 
     if (!pasarRes.data || !priceRes.data || priceRes.data.length === 0) return null;
 
-    const latestPrices = priceRes.data;
+    const latestPrices = [...priceRes.data];
+
+    // Forward-fill lookback up to 7 days for commodities missing on latestDate
+    const foundCids = new Set(latestPrices.map(p => p.komoditas_id));
+    const missingCids = cids.filter(cid => !foundCids.has(cid));
+    if (missingCids.length > 0) {
+      const minDateObj = new Date(latestDate);
+      minDateObj.setDate(minDateObj.getDate() - 7);
+      const minDateStr = minDateObj.toISOString().slice(0, 10);
+      const { data: lookbackPrices } = await supabase
+        .from("fact_harga_pasar")
+        .select("komoditas_id, pasar_id, harga_imputasi, is_imputed, tanggal")
+        .gte("tanggal", minDateStr)
+        .lte("tanggal", latestDate)
+        .in("komoditas_id", missingCids)
+        .not("harga_imputasi", "eq", "NaN")
+        .order("tanggal", { ascending: false });
+
+      if (lookbackPrices && lookbackPrices.length > 0) {
+        const seen = new Set<string>();
+        for (const p of lookbackPrices) {
+          const key = `${p.pasar_id}_${p.komoditas_id}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            latestPrices.push({
+              ...p,
+              is_imputed: true
+            });
+          }
+        }
+      }
+    }
 
     const marketRegion: Record<number, string> = {
       1: "Surabaya Utara",
@@ -1641,20 +1681,34 @@ export async function getLiveShoppingBasket(basketList: BasketItem[] = DEFAULT_B
       };
     }
 
-    const avgPrices: Record<number, number> = {};
+    const avgPrices: Record<number, { price: number; is_imputed: boolean; available: boolean }> = {};
     for (const item of basketList) {
       const valid = latestPrices.filter(p => p.komoditas_id === item.komoditas_id && Number(p.harga_imputasi) > 0);
-      avgPrices[item.komoditas_id] = valid.length > 0 
-        ? Math.round(valid.reduce((acc, curr) => acc + Number(curr.harga_imputasi), 0) / valid.length)
-        : 15000;
+      if (valid.length > 0) {
+        const sum = valid.reduce((acc, curr) => acc + Number(curr.harga_imputasi), 0);
+        const hasImputed = valid.some(p => p.is_imputed === true);
+        avgPrices[item.komoditas_id] = {
+          price: Math.round(sum / valid.length),
+          is_imputed: hasImputed,
+          available: true
+        };
+      } else {
+        avgPrices[item.komoditas_id] = {
+          price: 0,
+          is_imputed: false,
+          available: false
+        };
+      }
     }
 
     for (const pid in marketMap) {
       let total = 0;
       for (const item of basketList) {
         const match = latestPrices.find(p => p.pasar_id === Number(pid) && p.komoditas_id === item.komoditas_id);
-        const price = match && Number(match.harga_imputasi) > 0 ? Number(match.harga_imputasi) : avgPrices[item.komoditas_id];
-        total += price * item.qty;
+        const price = match && Number(match.harga_imputasi) > 0 ? Number(match.harga_imputasi) : (avgPrices[item.komoditas_id]?.available ? avgPrices[item.komoditas_id].price : 0);
+        if (price > 0) {
+          total += price * item.qty;
+        }
       }
       marketMap[pid].totalBelanja = Math.round(total);
     }
@@ -1695,36 +1749,57 @@ export async function getLiveShoppingBasket(basketList: BasketItem[] = DEFAULT_B
         .map(p => ({
           pasar_id: p.pasar_id,
           nama_pasar: (marketMap[p.pasar_id]?.nama_pasar || "Pasar").replace(/^Pasar\s+/i, ""),
-          price: Number(p.harga_imputasi)
+          price: Number(p.harga_imputasi),
+          is_imputed: Boolean(p.is_imputed)
         }))
         .sort((a, b) => a.price - b.price);
 
-      const best = itemPrices.length > 0
-        ? itemPrices[0]
-        : { nama_pasar: "Pasar Kota", price: avgPrices[item.komoditas_id] || 15000, pasar_id: 0 };
-
-      const itemCost = Math.round(best.price * item.qty);
-      splitTotal += itemCost;
-
-      splitItems.push({
-        komoditas_id: item.komoditas_id,
-        name: item.name,
-        qty: item.qty,
-        unit: item.unit,
-        cheapestMarket: best.nama_pasar,
-        cheapestPrice: best.price,
-        itemTotal: itemCost
-      });
+      if (itemPrices.length > 0) {
+        const best = itemPrices[0];
+        const itemCost = Math.round(best.price * item.qty);
+        splitTotal += itemCost;
+        splitItems.push({
+          komoditas_id: item.komoditas_id,
+          name: item.name,
+          qty: item.qty,
+          unit: item.unit,
+          cheapestMarket: best.nama_pasar,
+          cheapestPrice: best.price,
+          itemTotal: itemCost,
+          available: true,
+          is_imputed: best.is_imputed
+        });
+      } else {
+        splitItems.push({
+          komoditas_id: item.komoditas_id,
+          name: item.name,
+          qty: item.qty,
+          unit: item.unit,
+          cheapestMarket: "-",
+          cheapestPrice: 0,
+          itemTotal: 0,
+          available: false,
+          is_imputed: false
+        });
+      }
     }
 
     const additionalSaving = Math.max(0, minTotal - splitTotal);
     const cheapestMarkets = sorted.filter(s => s.totalBelanja === minTotal).map(s => s.nama_pasar);
     const cheapestMarketStr = cheapestMarkets.join(" & ");
 
-    const itemized = basketList.map(item => ({
-      ...item,
-      itemTotal: Math.round((avgPrices[item.komoditas_id] || 15000) * item.qty)
-    }));
+    const itemized: BasketSimulationItem[] = basketList.map(item => {
+      const avgInfo = avgPrices[item.komoditas_id];
+      const isAvailable = Boolean(avgInfo && avgInfo.available && avgInfo.price > 0);
+      const unitPrice = isAvailable ? avgInfo.price : 0;
+      return {
+        ...item,
+        price: unitPrice,
+        itemTotal: Math.round(unitPrice * item.qty),
+        available: isAvailable,
+        is_imputed: avgInfo?.is_imputed ?? false
+      };
+    });
 
     return {
       tanggal: latestDate,
